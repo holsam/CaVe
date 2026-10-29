@@ -1,0 +1,30 @@
+[project]
+name = "CaVe"
+version = "0.0.0"
+description = "Caged vesicle detection, review and box estimation for STA."
+readme = "README.md"
+authors = [
+    { name = "Sam Holland", email = "hol_sam@icloud.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "mrcfile>=1.5.4",
+    "napari[pyqt6]>=0.9.2",
+    "numpy>=2.5.4",
+    "pydantic>=2.14.1",
+    "scikit-image>=0.26.0",
+    "scipy>=1.18.1",
+    "typer>=0.27.3",
+]
+
+[project.scripts]
+cave = "cave.cli:app"
+
+[build-system]
+requires = ["uv_build>=0.11.26,<0.12.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+]
