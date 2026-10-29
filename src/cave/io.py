@@ -57,10 +57,10 @@ def find_tomograms(config: Config) -> dict[str, Tomogram]:
     for row in read_star_loop(config.tomograms_star):
         name = row['rlnTomoName']
         stem = Path(row['rlnTomoReconstructedTomogram']).stem
-        raw = _match(config.raw_dir, stem, '')
+        raw = _match(config.raw_dir, name, stem, '')
         if raw is None:
             raise FileNotFoundError(f'no raw tomogram for {name!r} in {config.raw_dir!r}')
-        denoised = _match(config.denoised_dir, stem, config.denoised_suffix) if config.denoised_dir else None
+        denoised = _match(config.denoised_dir, name, stem, config.denoised_suffix) if config.denoised_dir else None
         pixel_size, shape = _header(raw)
         binning = float(row['rlnTomoTomogramBinning'])
         unbinned = float(row['rlnTomoTiltSeriesPixelSize'])
@@ -101,15 +101,22 @@ def run_info(config_path: Path) -> None:
             f'  denoised={t.denoised_path is not None}'
         )
 
-# _stem_matches: whether a file stem is the RELION reconstruction stem, allowing a prefix such as nt39080-23_raw4_
-def _stem_matches(stem: str, recon: str) -> bool:
-    return stem == recon or stem.endswith('_' + recon)
+# _stem_matches: whether a file stem is <run prefix> + reconstruction stem, the prefix being the one the merged name carries
+def _stem_matches(stem: str, name: str, recon: str) -> bool:
+    prefix = stem.removesuffix(recon)
+    if prefix == stem and recon:
+        return False
+    # the name is <prefix><original RELION name>, and the original name begins the reconstruction stem
+    return name.startswith(prefix) and recon.startswith(name.removeprefix(prefix))
 
-# _match: the single MRC in a directory whose stem (minus suffix) matches the reconstruction stem, or None
-def _match(directory: Path, recon: str, suffix: str) -> Path | None:
-    hits = [p for p in sorted(directory.glob('*.mrc')) if _stem_matches(p.stem.removesuffix(suffix), recon)]
+# _match: the single MRC in a directory whose stem (minus suffix) matches the tomogram, or None
+def _match(directory: Path, name: str, recon: str, suffix: str) -> Path | None:
+    stems = [(p, p.stem.removesuffix(suffix)) for p in sorted(directory.glob('*.mrc'))]
+    hits = [p for p, s in stems if _stem_matches(s, name, recon)]
+    # unmerged star names carry no run prefix, so any prefixed file is accepted
+    hits = hits or [p for p, s in stems if s == recon or s.endswith('_' + recon)]
     if len(hits) > 1:
-        raise ValueError(f'{len(hits)} files in {directory!r} match {recon!r}')
+        raise ValueError(f'{len(hits)} files in {directory!r} match {name!r}')
     return hits[0] if hits else None
 
 # _header: voxel size and (z, y, x) shape from an MRC header without reading the data
