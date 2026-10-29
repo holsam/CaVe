@@ -51,28 +51,37 @@ def read_star_loop(path: Path) -> list[dict[str, str]]:
             rows.append(dict(zip(columns, line.split(), strict=True)))
     return rows
 
-# find_tomograms: pair every tomograms.star row with its raw and denoised MRC, keyed by RELION name
-def find_tomograms(config: Config) -> dict[str, Tomogram]:
+# find_tomograms: pair every tomograms.star row with its raw and denoised MRC, keyed by RELION name; problems raise unless an issues list is given, which collects them and skips those tomograms
+def find_tomograms(config: Config, *, issues: list[str] | None = None) -> dict[str, Tomogram]:
     out: dict[str, Tomogram] = {}
     for row in read_star_loop(config.tomograms_star):
-        name = row['rlnTomoName']
-        stem = Path(row['rlnTomoReconstructedTomogram']).stem
-        raw = _match(config.raw_dir, name, stem, '')
-        if raw is None:
-            raise FileNotFoundError(f'no raw tomogram for {name!r} in {config.raw_dir!r}')
-        denoised = _match(config.denoised_dir, name, stem, config.denoised_suffix) if config.denoised_dir else None
-        pixel_size, shape = _header(raw)
-        binning = float(row['rlnTomoTomogramBinning'])
-        unbinned = float(row['rlnTomoTiltSeriesPixelSize'])
-        size_xyz = (int(row['rlnTomoSizeX']), int(row['rlnTomoSizeY']), int(row['rlnTomoSizeZ']))
-        # the header and the star file must describe the same reconstruction
-        expected = tuple(round(n / binning) for n in size_xyz)
-        if any(abs(a - b) > 1 for a, b in zip(expected, shape[::-1], strict=True)):
-            raise ValueError(f'{name!r}: header shape (z, y, x) {shape!r} disagrees with star size {size_xyz!r} at binning {binning}')
-        if abs(pixel_size / (unbinned * binning) - 1.0) > 0.02:
-            raise ValueError(f'{name!r}: header pixel size {pixel_size} disagrees with {unbinned} x {binning}')
-        out[name] = Tomogram(name, stem, raw, denoised, pixel_size, shape, unbinned, size_xyz)
+        try:
+            out[row['rlnTomoName']] = _build(config, row)
+        except (FileNotFoundError, ValueError) as e:
+            if issues is None:
+                raise
+            issues.append(str(e))
     return out
+
+# _build: the Tomogram for one star row, raising if files are missing or disagree with the star
+def _build(config: Config, row: dict[str, str]) -> Tomogram:
+    name = row['rlnTomoName']
+    stem = Path(row['rlnTomoReconstructedTomogram']).stem
+    raw = _match(config.raw_dir, name, stem, '')
+    if raw is None:
+        raise FileNotFoundError(f'no raw tomogram for {name!r} in {config.raw_dir!r}')
+    denoised = _match(config.denoised_dir, name, stem, config.denoised_suffix) if config.denoised_dir else None
+    pixel_size, shape = _header(raw)
+    binning = float(row['rlnTomoTomogramBinning'])
+    unbinned = float(row['rlnTomoTiltSeriesPixelSize'])
+    size_xyz = (int(row['rlnTomoSizeX']), int(row['rlnTomoSizeY']), int(row['rlnTomoSizeZ']))
+    # the header and the star file must describe the same reconstruction
+    expected = tuple(round(n / binning) for n in size_xyz)
+    if any(abs(a - b) > 1 for a, b in zip(expected, shape[::-1], strict=True)):
+        raise ValueError(f'{name!r}: header shape (z, y, x) {shape!r} disagrees with star size {size_xyz!r} at binning {binning}')
+    if abs(pixel_size / (unbinned * binning) - 1.0) > 0.02:
+        raise ValueError(f'{name!r}: header pixel size {pixel_size} disagrees with {unbinned} x {binning}')
+    return Tomogram(name, stem, raw, denoised, pixel_size, shape, unbinned, size_xyz)
 
 # load_volume: read-only memory-mapped (z, y, x) volume; the map lives as long as the returned array
 def load_volume(tomo: Tomogram, *, source: Literal['raw', 'denoised'] = 'denoised') -> np.ndarray:
@@ -94,12 +103,17 @@ def from_centred_angstrom(xyz: tuple[float, float, float], tomo: Tomogram) -> tu
 # run_info: list tomograms and their sampling
 def run_info(config_path: Path) -> None:
     config = load_config(config_path)
-    tomos = find_tomograms(config)
+    issues: list[str] = []
+    tomos = find_tomograms(config, issues=issues)
     for t in tomos.values():
         print(
             f'{t.name}  shape(zyx)={t.shape}  {t.pixel_size:.2f} A  star size(xyz)={t.size_xyz}'
             f'  denoised={t.denoised_path is not None}'
         )
+    if issues:
+        print(f'\n{len(issues)} tomogram(s) skipped:')
+        for i in issues:
+            print(f'  {i}')
 
 # _stem_matches: whether a file stem is <run prefix> + reconstruction stem, the prefix being the one the merged name carries
 def _stem_matches(stem: str, name: str, recon: str) -> bool:
