@@ -38,7 +38,7 @@ Option | Description
 Summary table of usable and rejected tomograms (rejections listed with reasons). `--all` lists each tomogram with its shape, pixel size and whether a denoised pair exists.
 
 ### `pick`
-Napari picking of cage centres, autosaved to `out/picks.csv`. Reruns resume from existing picks and reopen at the tomogram you left (`out/progress.json`). The counts box marks opened tomograms with `*`.
+Napari picking of cage centres, autosaved to `out/picks.csv`. Reruns resume from existing picks and reopen at the tomogram you left (`out/progress.json`). The counts box marks opened tomograms with `*`; type a number or name in the box above it and press Enter to jump.
 
 Option | Description
 -- | --

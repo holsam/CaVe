@@ -102,6 +102,21 @@ class Picker:
     def step(self, delta: int) -> None:
         self.go(self.index + delta)
 
+    # jump: go to a tomogram by 1-based number or by name (exact match first, else the first containing the text); False if nothing matches
+    def jump(self, query: str) -> bool:
+        query = query.strip().lower()
+        names = [t.name.lower() for t in self.tomos]
+        if query.isdigit():
+            hit = int(query) - 1 if 0 < int(query) <= len(names) else None
+        elif query:
+            hit = names.index(query) if query in names else next((i for i, n in enumerate(names) if query in n), None)
+        else:
+            hit = None
+        if hit is None:
+            return False
+        self.go(hit)
+        return True
+
     # set_z: the z that newly clicked points are given, kept in step with the viewer's slice
     def set_z(self, z: float) -> None:
         self.points.feature_defaults = {'z': float(z)}
@@ -144,22 +159,33 @@ class Picker:
         self.viewer.text_overlay.text = f'{self.tomos[self.index].name}  ({self.index + 1}/{len(self.tomos)})  Enter next  Shift+Enter back'
         self.viewer.text_overlay.visible = True
 
-# install_controls: window-level Enter and Shift+Enter shortcuts, independent of canvas keyboard focus, and the scrollable counts box
+# install_controls: window-level Enter and Shift+Enter shortcuts, independent of canvas keyboard focus, a jump box and the scrollable counts box
 def install_controls(window, picker: Picker):
     from qtpy.QtCore import Qt
     from qtpy.QtGui import QFontDatabase, QKeySequence
-    from qtpy.QtWidgets import QLabel, QScrollArea, QShortcut
+    from qtpy.QtWidgets import QLabel, QLineEdit, QScrollArea, QShortcut, QVBoxLayout, QWidget
 
     box = QLabel()
     box.setFont(QFontDatabase.systemFont(QFontDatabase.FixedFont))
     picker.label = box
     picker.refresh()
+    jump = QLineEdit()
+    jump.setPlaceholderText('go to number or name, then Enter')
+
+    # Enter inside the jump box goes to the typed tomogram, anywhere else it steps on
+    def on_enter(delta: int) -> None:
+        if not jump.hasFocus():
+            picker.step(delta)
+        elif delta > 0 and picker.jump(jump.text()):
+            jump.clear()
+            jump.clearFocus()
+
     # the main and keypad Enter keys both count
     shortcuts = []
     for keys, delta in (('Return', 1), ('Enter', 1), ('Shift+Return', -1), ('Shift+Enter', -1)):
         shortcut = QShortcut(QKeySequence(keys), window)
         shortcut.setContext(Qt.WindowShortcut)
-        shortcut.activated.connect(lambda delta=delta: picker.step(delta))
+        shortcut.activated.connect(lambda delta=delta: on_enter(delta))
         shortcuts.append(shortcut)
     # keep the shortcuts alive with the box
     box._shortcuts = shortcuts
@@ -169,7 +195,12 @@ def install_controls(window, picker: Picker):
     area.setWidgetResizable(True)
     area.setMinimumHeight(100)
     area._box = box
-    return area
+    panel = QWidget()
+    layout = QVBoxLayout(panel)
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.addWidget(jump)
+    layout.addWidget(area)
+    return panel
 
 # run_pick: one napari session over every tomogram, opening each at middle Z in add mode
 def run_pick(config_path: Path, tomos: list[str] | None) -> None:
