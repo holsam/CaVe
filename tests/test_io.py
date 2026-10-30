@@ -56,10 +56,12 @@ def test_find_tomograms(tmp_path: Path) -> None:
     assert t.denoised_path is not None
     assert load_volume(t, source='denoised').shape == (4, 6, 8)
 
-# test_find_tomograms_shape_mismatch: a header that disagrees with the star file is an error
+# test_find_tomograms_shape_mismatch: a header that disagrees with the star file is skipped and reported as an issue
 def test_find_tomograms_shape_mismatch(tmp_path: Path) -> None:
-    with pytest.raises(ValueError, match='disagrees'):
-        find_tomograms(_config(tmp_path, shape=(4, 6, 20)))
+    issues: dict[str, str] = {}
+    tomos = find_tomograms(_config(tmp_path, shape=(4, 6, 20)), issues=issues)
+    assert tomos == {}
+    assert len(issues) == 1 and 'disagrees' in next(iter(issues.values()))
 
 # test_centred_round_trip: the tomogram centre is the origin and the conversion inverts
 def test_centred_round_trip(tmp_path: Path) -> None:
