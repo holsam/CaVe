@@ -119,11 +119,11 @@ class Picker:
         self.viewer.text_overlay.text = f'{self.tomos[self.index].name}  ({self.index + 1}/{len(self.tomos)})  Enter next  Shift+Enter back'
         self.viewer.text_overlay.visible = True
 
-# install_controls: window-level Enter and Shift+Enter shortcuts, independent of canvas keyboard focus, and the counts box
+# install_controls: window-level Enter and Shift+Enter shortcuts, independent of canvas keyboard focus, and the scrollable counts box
 def install_controls(window, picker: Picker):
     from qtpy.QtCore import Qt
     from qtpy.QtGui import QFontDatabase, QKeySequence
-    from qtpy.QtWidgets import QLabel, QShortcut
+    from qtpy.QtWidgets import QLabel, QScrollArea, QShortcut
 
     box = QLabel()
     box.setFont(QFontDatabase.systemFont(QFontDatabase.FixedFont))
@@ -138,7 +138,13 @@ def install_controls(window, picker: Picker):
         shortcuts.append(shortcut)
     # keep the shortcuts alive with the box
     box._shortcuts = shortcuts
-    return box
+    # one line per tomogram would otherwise force the window as tall as the list, and a canvas over the GL texture limit cannot draw
+    area = QScrollArea()
+    area.setWidget(box)
+    area.setWidgetResizable(True)
+    area.setMinimumHeight(100)
+    area._box = box
+    return area
 
 # run_pick: one napari session over every tomogram, opening each at middle Z in add mode
 def run_pick(config_path: Path, tomos: list[str] | None) -> None:
