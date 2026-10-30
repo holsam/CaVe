@@ -37,6 +37,20 @@ def read_picks(path: Path) -> list[Pick]:
     with open(path, newline='') as handle:
         return [Pick(**row) for row in csv.DictReader(handle)]
 
+# Progress: where picking stopped and which tomograms have been opened, saved beside picks.csv
+class Progress(BaseModel):
+    last: str | None = None
+    visited: list[str] = []
+
+# write_progress: dump progress to JSON
+def write_progress(progress: Progress, path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(progress.model_dump_json())
+
+# read_progress: load progress, empty if the file does not exist yet
+def read_progress(path: Path) -> Progress:
+    return Progress.model_validate_json(path.read_text()) if path.exists() else Progress()
+
 # Picker: pick state and tomogram navigation, driving any napari viewer with an image layer and a points layer
 class Picker:
     # points is a 2D (y, x) layer, so every pick shows at every Z, with each pick's z kept as a feature; label is anything with setText, e.g. a QLabel, for the counts
@@ -47,10 +61,15 @@ class Picker:
         for p in read_picks(csv_path):
             if p.tomogram in self.picks:
                 self.picks[p.tomogram].append((p.z, p.y, p.x))
+        # resume at the tomogram shown last time, if it is among those being picked
+        self.progress_path = csv_path.with_name('progress.json')
+        saved = read_progress(self.progress_path)
+        self.visited = set(saved.visited)
+        names = [t.name for t in tomos]
         self.index = 0
         self._loading = False
         self._marker_px = 0.0
-        self.go(0)
+        self.go(names.index(saved.last) if saved.last in names else 0)
 
     # go: show tomogram i at its middle Z with its saved picks; clamped, so no wrapping
     def go(self, i: int) -> None:
@@ -75,6 +94,8 @@ class Picker:
         self.viewer.dims.set_point(0, tomo.shape[0] // 2)
         self.set_z(tomo.shape[0] // 2)
         self.viewer.reset_view()
+        self.visited.add(tomo.name)
+        write_progress(Progress(last=tomo.name, visited=sorted(self.visited)), self.progress_path)
         self.refresh()
 
     # step: move by delta tomograms
@@ -109,10 +130,11 @@ class Picker:
             self.csv_path,
         )
 
-    # summary: one line per tomogram with its pick count, the current one marked, and the total
+    # summary: one line per tomogram with its pick count, the current one marked > and opened ones *, then the visited count and the total
     def summary(self) -> str:
-        lines = [f'{">" if i == self.index else " "} {t.name}  {len(self.picks[t.name])}' for i, t in enumerate(self.tomos)]
-        return '\n'.join(lines + [f'  total  {sum(map(len, self.picks.values()))}'])
+        lines = [f'{">" if i == self.index else " "} {"*" if t.name in self.visited else " "} {t.name}  {len(self.picks[t.name])}' for i, t in enumerate(self.tomos)]
+        opened = sum(t.name in self.visited for t in self.tomos)
+        return '\n'.join(lines + [f'  visited  {opened}/{len(self.tomos)}', f'  total  {sum(map(len, self.picks.values()))}'])
 
     # refresh: update the counts box and the overlay
     def refresh(self) -> None:

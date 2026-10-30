@@ -68,3 +68,13 @@ def test_pick_save_and_resume(tmp_path: Path) -> None:
     resumed = Picker(_viewer(), tomos, config, csv_path, image, points)
     assert points.data.tolist() == [[2.0, 3.0], [4.0, 1.0]] and points.features['z'].tolist() == [5.0, 5.0]
     assert resumed.picks['B'] == [(4.0, 1.0, 1.0)]
+
+# test_progress: the last tomogram is reopened on the next run and opened tomograms are marked
+def test_progress(tmp_path: Path) -> None:
+    tomos, config, image, points = _setup(tmp_path)
+    csv_path = tmp_path / 'picks.csv'
+    picker = Picker(_viewer(), tomos, config, csv_path, image, points)
+    assert picker.index == 0 and picker.summary().splitlines()[-2].endswith('1/2')
+    picker.step(1)
+    assert Picker(_viewer(), tomos, config, csv_path, image, points).index == 1
+    assert [line[2] for line in picker.summary().splitlines()[:2]] == ['*', '*']
