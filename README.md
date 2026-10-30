@@ -35,7 +35,7 @@ Option | Description
 `-c`, `--config` | Where to write `config.toml` (default `config.toml`)
 
 ### `info`
-Lists each tomogram with its shape, pixel size and whether a denoised pair exists.
+Summary table of usable and rejected tomograms (rejections listed with reasons). `--all` lists each tomogram with its shape, pixel size and whether a denoised pair exists.
 
 ### `pick`
 Napari picking of cage centres, autosaved to `out/picks.csv`. Reruns resume from existing picks.
