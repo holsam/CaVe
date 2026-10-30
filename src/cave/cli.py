@@ -27,9 +27,13 @@ def info(
         Path,
         typer.Argument(help='Path to config.toml (default: config.toml in the current directory).')
     ] = Path('config.toml'),
+    show_all: Annotated[
+        bool,
+        typer.Option('--all', help='List every tomogram instead of a summary.')
+    ] = False,
 ) -> None:
-    '''Display metadata about identified tomograms.'''
-    run_info(config)
+    '''Summarise identified tomograms and rejections.'''
+    run_info(config, show_all=show_all)
 
 @app.command()
 def estimate(

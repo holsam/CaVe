@@ -43,7 +43,8 @@ class Config(BaseModel):
 # load_config: read a TOML file into a Config, resolving relative paths against the file
 def load_config(path: Path) -> Config:
     if not path.is_file():
-        raise FileNotFoundError(f'{path!r} not found, enter the path to config.toml as an argument')
+        print(f'[error] {path!r} not found, enter the path to config.toml as an argument or run cave config command')
+        raise SystemExit(1)
     with open(path, 'rb') as handle:
         config = Config(**tomllib.load(handle))
     base = path.resolve().parent
