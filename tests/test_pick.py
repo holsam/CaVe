@@ -28,7 +28,7 @@ def _setup(tmp_path: Path) -> tuple[list[Tomogram], Config, SimpleNamespace, Sim
         with mrcfile.new(path) as mrc:
             mrc.set_data(np.zeros((10, 8, 8), dtype=np.float32))
         tomos.append(Tomogram(name, name, path, None, 5.36, (10, 8, 8), 1.34, (32, 32, 40)))
-    return tomos, Config(raw_dir=tmp_path, tomograms_star=tmp_path / 't.star', source='raw'), SimpleNamespace(data=None, contrast_limits=None), SimpleNamespace(data=None, size=None, features=None, feature_defaults=None, current_size=None)
+    return tomos, Config(raw_dir=tmp_path, tomograms_star=tmp_path / 't.star', source='raw'), SimpleNamespace(data=None, contrast_limits=None), SimpleNamespace(data=None, size=None, features=None, feature_defaults=None, current_size=None, selected_data=set())
 
 # test_pick_save_and_resume: picks autosave per tomogram, navigation keeps them apart, and a new Picker restores them
 def test_pick_save_and_resume(tmp_path: Path) -> None:
@@ -51,6 +51,14 @@ def test_pick_save_and_resume(tmp_path: Path) -> None:
     points.selected_data = {1}
     picker.show_selected()
     assert _viewer.z == 5.0
+    # a stale selection must not break navigation, and is cleared on the way
+    points.selected_data = {1}
+    picker.step(1)
+    assert points.selected_data == set()
+    picker.step(-1)
+    # a selection beyond the features is ignored, not an IndexError
+    points.selected_data = {99}
+    picker.show_selected()
     picker.step(1)
     # clamped at both ends
     picker.step(1)

@@ -58,6 +58,8 @@ class Picker:
         tomo = self.tomos[self.index]
         self._loading = True
         try:
+            # a selection from the previous tomogram would otherwise index the new, shorter features
+            self.points.selected_data = set()
             vol = load_volume(tomo, source=self.config.source)
             self.image.data = vol
             self.image.contrast_limits = tuple(float(v) for v in np.percentile(vol[::8, ::8, ::8], (1, 99)))
@@ -86,7 +88,8 @@ class Picker:
     # show_selected: jump to the z of a single selected pick, so clicking a finished pick lands on its slice
     def show_selected(self) -> None:
         selected = list(self.points.selected_data)
-        if len(selected) == 1:
+        # napari fires highlight mid-swap, while the features still belong to the old tomogram
+        if not self._loading and len(selected) == 1 and selected[0] < len(self.points.features):
             self.viewer.dims.set_point(0, float(self.points.features['z'].iloc[selected[0]]))
 
     # sync: take the points layer as this tomogram's picks and save; wired to the layer's data event
