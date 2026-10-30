@@ -1,6 +1,6 @@
 [project]
 name = "CaVe"
-version = "0.1.2"
+version = "0.1.3"
 description = "Caged vesicle detection, review and box estimation for STA."
 readme = "README.md"
 authors = [

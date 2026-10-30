@@ -3,7 +3,7 @@ CaVe: tomogram discovery from tomograms.star, MRC loading and coordinate convers
 '''
 
 # Import external dependencies
-import argparse, csv, mrcfile, numpy as np
+import argparse, csv, mrcfile, sys, numpy as np
 from dataclasses import dataclass
 from pathlib import Path
 from pydantic import BaseModel
@@ -51,7 +51,7 @@ def read_star_loop(path: Path) -> list[dict[str, str]]:
             rows.append(dict(zip(columns, line.split(), strict=True)))
     return rows
 
-# find_tomograms: pair every tomograms.star row with its raw and denoised MRC, keyed by RELION name; problems raise unless an issues list is given, which collects them and skips those tomograms
+# find_tomograms: pair every tomograms.star row with its raw and denoised MRC, keyed by RELION name; bad tomograms are skipped; problems go to the issues list if given, else a warning on stderr
 def find_tomograms(config: Config, *, issues: list[str] | None = None) -> dict[str, Tomogram]:
     out: dict[str, Tomogram] = {}
     for row in read_star_loop(config.tomograms_star):
@@ -59,8 +59,9 @@ def find_tomograms(config: Config, *, issues: list[str] | None = None) -> dict[s
             out[row['rlnTomoName']] = _build(config, row)
         except (FileNotFoundError, ValueError) as e:
             if issues is None:
-                raise
-            issues.append(str(e))
+                print(f'skipped: {e}', file=sys.stderr)
+            else:
+                issues.append(str(e))
     return out
 
 # _build: the Tomogram for one star row, raising if files are missing or disagree with the star
